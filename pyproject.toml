@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nnunet-tracker"
+version = "0.1.0"
+description = "Lightweight MLflow-based experiment tracking for nnU-Net"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "Sathiesh Kumar"}]
+keywords = ["nnunet", "mlflow", "experiment-tracking", "medical-imaging", "segmentation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+dependencies = [
+    "mlflow>=2.10.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.8.0",
+]
+nnunet = [
+    "nnunetv2>=2.2,<2.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/sathiesh/nnunet-tracker"
+Repository = "https://github.com/sathiesh/nnunet-tracker"
+Documentation = "https://github.com/sathiesh/nnunet-tracker#readme"
+"Bug Tracker" = "https://github.com/sathiesh/nnunet-tracker/issues"
+
+[project.scripts]
+nnunet-tracker = "nnunet_tracker.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+nnunet_tracker = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["nnunet_tracker*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["mlflow.*", "nnunetv2.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests requiring nnU-Net installed",
+]
+
+[tool.coverage.run]
+source = ["src/nnunet_tracker"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

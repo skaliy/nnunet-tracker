@@ -36,18 +36,6 @@ Export publication-ready tables:
 nnunet-tracker export --experiment Dataset001_BrainTumour --format latex -o results.tex
 ```
 
-## Features
-
-- **Dynamic subclass factory** -- wraps any nnU-Net trainer class with MLflow hooks
-- **Fail-safe logging** -- tracking errors never crash training runs
-- **DDP-safe** -- only rank 0 logs metrics in distributed training
-- **Cross-validation summarization** -- aggregate Dice scores across folds
-- **Publication export** -- CSV and LaTeX (booktabs) tables from experiment results
-- **Dataset fingerprinting** -- SHA-256 hashing for reproducibility
-- **Plans extraction** -- full nnU-Net configuration captured as MLflow parameters
-- **Hospital-compatible** -- fully local operation, no cloud dependency
-- **CI/CD integration** -- `summarize` exits 0 (complete) or 2 (partial) for pipeline scripting
-
 ## CLI Commands
 
 | Command | Description |

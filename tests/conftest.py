@@ -226,6 +226,12 @@ class MockTrainerBase:
         # Mimics real nnU-Net which increments current_epoch in on_epoch_end
         self.current_epoch += 1
 
+    def perform_actual_validation(self, save_probabilities=False):
+        pass
+
+    def load_checkpoint(self, filename_or_checkpoint):
+        pass
+
 
 @pytest.fixture
 def mock_trainer_class():

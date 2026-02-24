@@ -67,6 +67,6 @@ def should_log(trainer_instance: object) -> bool:
         local_rank = getattr(trainer_instance, "local_rank", None)
         if local_rank is None:
             return is_main_process()
-        return local_rank == 0
+        return bool(local_rank == 0)
 
     return is_main_process()

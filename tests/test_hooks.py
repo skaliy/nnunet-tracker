@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import warnings
 from unittest.mock import MagicMock, patch
 
@@ -21,7 +22,9 @@ from nnunet_tracker.hooks import (
     log_run_start,
     log_train_loss,
     log_validation_metrics,
+    log_validation_summary,
 )
+from tests.conftest import MockTrainerBase, mock_mlflow_modules
 
 
 class TestFailsafe:
@@ -838,3 +841,254 @@ class TestPathContainment:
 
         with patch.dict("os.environ", {"nnUNet_results": str(results_dir)}):
             assert _is_safe_output_folder(traversal_path) is False
+
+
+class TestLogValidationSummary:
+    """Tests for log_validation_summary()."""
+
+    def test_happy_path_logs_foreground_and_per_class(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {
+            "foreground_mean": {"Dice": 0.85, "IoU": 0.75},
+            "mean": {
+                "1": {"Dice": 0.80, "IoU": 0.70},
+                "2": {"Dice": 0.90, "IoU": 0.85},
+            },
+        }
+        (val_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_called_once()
+        call_args = mock_client.log_batch.call_args
+        assert call_args[0][0] == "run-123"
+        metrics = call_args[1]["metrics"]
+        metric_dict = {m.key: m.value for m in metrics}
+        assert metric_dict["final_val_mean_fg_dice"] == 0.85
+        assert metric_dict["final_val_mean_fg_iou"] == 0.75
+        assert metric_dict["final_val_dice_class_1"] == 0.80
+        assert metric_dict["final_val_iou_class_1"] == 0.70
+        assert metric_dict["final_val_dice_class_2"] == 0.90
+        assert metric_dict["final_val_iou_class_2"] == 0.85
+
+    def test_returns_early_when_disabled(
+        self, mock_trainer, tracker_config_disabled, tmp_path
+    ) -> None:
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_disabled)
+
+        mock_client.assert_not_called()
+
+    def test_returns_early_when_no_run_id(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = None
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_not_called()
+
+    def test_returns_early_when_no_output_folder(
+        self, mock_trainer, tracker_config_enabled
+    ) -> None:
+        mock_trainer.output_folder = None
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_not_called()
+
+    def test_returns_early_when_summary_missing(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+        # Do NOT create validation/summary.json
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_not_called()
+
+    def test_nan_values_filtered(self, mock_trainer, tracker_config_enabled, tmp_path) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {
+            "foreground_mean": {"Dice": 0.85, "IoU": float("nan")},
+            "mean": {
+                "1": {"Dice": float("nan"), "IoU": 0.70},
+                "2": {"Dice": "not_a_number", "IoU": 0.85},
+            },
+        }
+        # json.dumps with allow_nan=True writes NaN as NaN (JavaScript literal)
+        (val_dir / "summary.json").write_text(json.dumps(summary, allow_nan=True), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_called_once()
+        metrics = mock_client.log_batch.call_args[1]["metrics"]
+        metric_dict = {m.key: m.value for m in metrics}
+        # NaN values should be filtered out
+        assert "final_val_mean_fg_iou" not in metric_dict
+        assert "final_val_dice_class_1" not in metric_dict
+        # Non-numeric string should be filtered out
+        assert "final_val_dice_class_2" not in metric_dict
+        # Valid values should remain
+        assert metric_dict["final_val_mean_fg_dice"] == 0.85
+        assert metric_dict["final_val_iou_class_1"] == 0.70
+        assert metric_dict["final_val_iou_class_2"] == 0.85
+
+    def test_inf_values_filtered(self, mock_trainer, tracker_config_enabled, tmp_path) -> None:
+        """Inf/-Inf values should be filtered out (isfinite consistency fix)."""
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {
+            "foreground_mean": {"Dice": float("inf"), "IoU": 0.75},
+            "mean": {
+                "1": {"Dice": float("-inf"), "IoU": 0.70},
+            },
+        }
+        (val_dir / "summary.json").write_text(json.dumps(summary, allow_nan=True), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_called_once()
+        metrics = mock_client.log_batch.call_args[1]["metrics"]
+        metric_dict = {m.key: m.value for m in metrics}
+        # Inf values should be filtered out
+        assert "final_val_mean_fg_dice" not in metric_dict
+        assert "final_val_dice_class_1" not in metric_dict
+        # Valid values should remain
+        assert metric_dict["final_val_mean_fg_iou"] == 0.75
+        assert metric_dict["final_val_iou_class_1"] == 0.70
+
+    def test_empty_summary_no_log_batch(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        (val_dir / "summary.json").write_text("{}", encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_not_called()
+
+    def test_artifact_logged_when_enabled(self, mock_trainer, tmp_path) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {"foreground_mean": {"Dice": 0.85, "IoU": 0.75}}
+        (val_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        config = TrackerConfig(
+            tracking_uri="./test_mlruns",
+            experiment_name="test_experiment",
+            enabled=True,
+            log_artifacts=True,
+        )
+
+        mock_client = MagicMock()
+        with (
+            mock_mlflow_modules(mock_client),
+            patch("nnunet_tracker.hooks._is_safe_output_folder", return_value=True),
+        ):
+            log_validation_summary(mock_trainer, config)
+
+        mock_client.log_artifact.assert_called_once()
+        call_args = mock_client.log_artifact.call_args
+        assert call_args[0][0] == "run-123"
+        assert call_args[0][1] == str(val_dir / "summary.json")
+        assert call_args[1]["artifact_path"] == "validation"
+
+    def test_artifact_not_logged_when_disabled(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {"foreground_mean": {"Dice": 0.85, "IoU": 0.75}}
+        (val_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+        # tracker_config_enabled has log_artifacts=False
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_artifact.assert_not_called()
+
+    def test_region_label_key_sanitized(
+        self, mock_trainer, tracker_config_enabled, tmp_path
+    ) -> None:
+        val_dir = tmp_path / "validation"
+        val_dir.mkdir()
+        summary = {
+            "mean": {
+                "(1, 2)": {"Dice": 0.88, "IoU": 0.78},
+            },
+        }
+        (val_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+        mock_trainer.output_folder = str(tmp_path)
+        mock_trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(mock_trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_called_once()
+        metrics = mock_client.log_batch.call_args[1]["metrics"]
+        metric_dict = {m.key: m.value for m in metrics}
+        assert "final_val_dice_class_1_2" in metric_dict
+        assert metric_dict["final_val_dice_class_1_2"] == 0.88
+        assert "final_val_iou_class_1_2" in metric_dict
+        assert metric_dict["final_val_iou_class_1_2"] == 0.78
+
+    def test_ddp_non_primary_rank_skipped(self, tracker_config_enabled, tmp_path) -> None:
+        trainer = MockTrainerBase()
+        trainer.is_ddp = True
+        trainer.local_rank = 1
+        trainer.output_folder = str(tmp_path)
+        trainer._mlflow_run_id = "run-123"
+
+        mock_client = MagicMock()
+        with mock_mlflow_modules(mock_client):
+            log_validation_summary(trainer, tracker_config_enabled)
+
+        mock_client.log_batch.assert_not_called()

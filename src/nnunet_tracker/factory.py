@@ -14,6 +14,7 @@ from nnunet_tracker.hooks import (
     log_run_start,
     log_train_loss,
     log_validation_metrics,
+    log_validation_summary,
 )
 
 # Sentinel attribute to detect already-tracked classes
@@ -69,14 +70,14 @@ def create_tracked_trainer(
     class TrackedTrainer(base_class):
         """Dynamically created trainer subclass with MLflow tracking."""
 
-        _tracker_config: TrackerConfig = config
+        _tracker_config: TrackerConfig = config  # type: ignore[assignment]
         _original_trainer_class_name: str = base_class.__name__
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._mlflow_run_id: str | None = None
 
-        def run_training(self) -> None:
+        def run_training(self):
             """Wrap run_training with crash-safe MLflow run cleanup.
 
             Only catches Exception (not BaseException) so that
@@ -84,7 +85,7 @@ def create_tracked_trainer(
             attempting network calls that could hang on SLURM SIGTERM.
             """
             try:
-                super().run_training()
+                return super().run_training()
             except Exception:
                 if self._tracker_config.enabled:
                     end_run_as_failed(run_id=self._mlflow_run_id)
@@ -119,6 +120,11 @@ def create_tracked_trainer(
         def on_train_end(self) -> None:
             super().on_train_end()
             log_run_end(self, self._tracker_config)
+
+        def perform_actual_validation(self, *args, **kwargs):
+            result = super().perform_actual_validation(*args, **kwargs)
+            log_validation_summary(self, self._tracker_config)
+            return result
 
     TrackedTrainer.__name__ = f"Tracked{base_class.__name__}"
     TrackedTrainer.__qualname__ = f"create_tracked_trainer.<locals>.Tracked{base_class.__name__}"

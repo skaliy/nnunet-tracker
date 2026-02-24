@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from nnunet_tracker.summarize import (
+    _MAX_FOLD_RESULTS,
     CVSummary,
     FoldResult,
     _extract_fold_result,
@@ -285,6 +286,37 @@ class TestExtractFoldResult:
         assert result.val_loss is None
         assert result.dice_per_class == {}
 
+    def test_nan_inf_filtered_from_per_class_dice(self) -> None:
+        """NaN and Inf values in per-class Dice should be filtered out."""
+        run = _make_fold_run(
+            fold=0,
+            dice_per_class={0: 0.80, 1: float("nan"), 2: float("inf"), 3: float("-inf")},
+        )
+        result = _extract_fold_result(run)
+        assert result is not None
+        # Only the finite value should survive
+        assert result.dice_per_class == {0: 0.80}
+
+    def test_nan_inf_filtered_from_scalar_metrics(self) -> None:
+        """NaN/Inf in mean_fg_dice, val_loss, ema_fg_dice should be None."""
+        run = MockRun(
+            info=MockRunInfo(run_id="r0"),
+            data=MockRunData(
+                metrics={
+                    "mean_fg_dice": float("nan"),
+                    "val_loss": float("inf"),
+                    "ema_fg_dice": float("-inf"),
+                },
+                params={"fold": "0"},
+                tags={"nnunet_tracker.fold": "0"},
+            ),
+        )
+        result = _extract_fold_result(run)
+        assert result is not None
+        assert result.mean_fg_dice is None
+        assert result.val_loss is None
+        assert result.ema_fg_dice is None
+
 
 class TestQueryFoldRuns:
     """Tests for _query_fold_runs helper."""
@@ -333,6 +365,48 @@ class TestQueryFoldRuns:
         result = _query_fold_runs(client, "exp-1", "test' or '1'='1")
         assert result == []
         client.search_runs.assert_not_called()
+
+    def test_warns_when_max_results_hit_no_cv_group(self, caplog) -> None:
+        """Warning emitted when query hits _MAX_FOLD_RESULTS limit (no cv_group)."""
+        import logging
+
+        client = MagicMock()
+        runs = [_make_fold_run(i % 5) for i in range(_MAX_FOLD_RESULTS)]
+        client.search_runs.return_value = runs
+
+        with caplog.at_level(logging.WARNING, logger="nnunet_tracker"):
+            result = _query_fold_runs(client, "exp-1", None)
+
+        assert len(result) == _MAX_FOLD_RESULTS
+        assert "Some fold runs may be missing" in caplog.text
+
+    def test_warns_when_max_results_hit_with_cv_group(self, caplog) -> None:
+        """Warning emitted when query hits _MAX_FOLD_RESULTS limit (with cv_group)."""
+        import logging
+
+        client = MagicMock()
+        runs = [_make_fold_run(i % 5) for i in range(_MAX_FOLD_RESULTS)]
+        client.search_runs.return_value = runs
+
+        with caplog.at_level(logging.WARNING, logger="nnunet_tracker"):
+            result = _query_fold_runs(client, "exp-1", "Dataset001|3d_fullres|nnUNetPlans")
+
+        assert len(result) == _MAX_FOLD_RESULTS
+        assert "Some fold runs may be missing" in caplog.text
+
+    def test_no_warning_below_max_results(self, caplog) -> None:
+        """No warning when query returns fewer than _MAX_FOLD_RESULTS."""
+        import logging
+
+        client = MagicMock()
+        runs = [_make_fold_run(i) for i in range(5)]
+        client.search_runs.return_value = runs
+
+        with caplog.at_level(logging.WARNING, logger="nnunet_tracker"):
+            result = _query_fold_runs(client, "exp-1", None)
+
+        assert len(result) == 5
+        assert "Some fold runs may be missing" not in caplog.text
 
 
 class TestSummarizeExperiment:

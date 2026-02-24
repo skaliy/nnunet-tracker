@@ -248,3 +248,63 @@ class TestExportCommand:
         captured = capsys.readouterr()
         assert "My Results" in captured.out
         assert r"\label{tab:my_results}" in captured.out
+
+    def test_output_write_oserror_exits_1(self, tmp_path, capsys) -> None:
+        """OSError during file write produces clean error and exits 1."""
+        # Use a non-writable directory to trigger OSError
+        readonly_dir = tmp_path / "readonly"
+        readonly_dir.mkdir()
+        readonly_dir.chmod(0o555)
+        output_path = str(readonly_dir / "subdir" / "results.csv")
+        try:
+            with pytest.raises(SystemExit) as exc_info:
+                # Validate output dir existence check
+                main(
+                    [
+                        "export",
+                        "--experiment",
+                        "test",
+                        "--format",
+                        "csv",
+                        "--output",
+                        output_path,
+                    ]
+                )
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "output directory does not exist" in captured.err
+        finally:
+            readonly_dir.chmod(0o755)
+
+    def test_output_write_permission_error_exits_1(self, tmp_path, capsys) -> None:
+        """Permission error during atomic write produces clean error and exits 1."""
+        summary = _make_summary()
+        # Create a non-writable directory where the output file should go
+        output_dir = tmp_path / "noperm"
+        output_dir.mkdir()
+        output_path = str(output_dir / "results.csv")
+        output_dir.chmod(0o555)
+        try:
+            with (
+                patch(
+                    "nnunet_tracker.summarize.summarize_experiment",
+                    return_value=summary,
+                ),
+                pytest.raises(SystemExit) as exc_info,
+            ):
+                main(
+                    [
+                        "export",
+                        "--experiment",
+                        "test",
+                        "--format",
+                        "csv",
+                        "--output",
+                        output_path,
+                    ]
+                )
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "Failed to write output file" in captured.err
+        finally:
+            output_dir.chmod(0o755)

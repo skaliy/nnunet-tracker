@@ -1,6 +1,5 @@
 # nnunet-tracker
 
-[![CI](https://github.com/sathiesh/nnunet-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/sathiesh/nnunet-tracker/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/nnunet-tracker)](https://pypi.org/project/nnunet-tracker/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/nnunet-tracker/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)

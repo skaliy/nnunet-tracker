@@ -127,11 +127,12 @@ def _resolve_trainer_class(trainer_name: str) -> type | None:
             "training",
             "nnUNetTrainer",
         )
-        return recursive_find_python_class(
+        cls: type | None = recursive_find_python_class(
             folder=trainer_search_path,
             class_name=trainer_name,
             current_module="nnunetv2.training.nnUNetTrainer",
         )
+        return cls
     except (ImportError, ModuleNotFoundError):
         logger.debug("Failed to import nnU-Net for trainer resolution", exc_info=True)
         return None
@@ -171,15 +172,15 @@ def _run_with_tracked_trainer(
     try:
         with open(plans_file, encoding="utf-8") as f:
             plans = json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"Error: Plans file is not valid JSON: {plans_file}\n  {e}", file=sys.stderr)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error: Cannot read plans file: {plans_file}\n  {e}", file=sys.stderr)
         sys.exit(1)
     try:
         with open(dataset_json_file, encoding="utf-8") as f:
             dataset_json = json.load(f)
-    except json.JSONDecodeError as e:
+    except (OSError, json.JSONDecodeError) as e:
         print(
-            f"Error: Dataset JSON is not valid JSON: {dataset_json_file}\n  {e}",
+            f"Error: Cannot read dataset JSON: {dataset_json_file}\n  {e}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -225,6 +226,18 @@ def _run_with_tracked_trainer(
                 )
 
         trainer.run_training()
+
+        try:
+            best_ckpt = os.path.join(trainer.output_folder, "checkpoint_best.pth")
+            if os.path.isfile(best_ckpt):
+                trainer.load_checkpoint(best_ckpt)
+            trainer.perform_actual_validation()
+        except Exception:
+            logger.warning(
+                "perform_actual_validation() failed for fold %s. Training completed successfully.",
+                f_idx,
+            )
+            logger.debug("Validation error details", exc_info=True)
 
 
 def _build_nnunet_arg_parser() -> argparse.ArgumentParser:

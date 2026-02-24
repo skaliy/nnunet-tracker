@@ -194,7 +194,7 @@ def _auto_detect_cv_group(client: Any, experiment_id: str) -> str | None:
         max_results=1,
     )
     if runs:
-        cv_group = runs[0].data.tags.get("nnunet_tracker.cv_group")
+        cv_group: str | None = runs[0].data.tags.get("nnunet_tracker.cv_group")
         if cv_group is None:
             logger.debug("Most recent fold run has no cv_group tag (v0.2.0 run?)")
         return cv_group
@@ -209,29 +209,48 @@ def _query_fold_runs(client: Any, experiment_id: str, cv_group: str | None) -> l
     """
     if cv_group is None:
         # No cv_group: query all fold-typed FINISHED runs
-        return client.search_runs(
-            experiment_ids=[experiment_id],
-            filter_string=(
-                "tags.`nnunet_tracker.run_type` = 'fold' and attributes.status = 'FINISHED'"
-            ),
-            order_by=["start_time DESC"],
-            max_results=_MAX_FOLD_RESULTS,
+        runs = list(
+            client.search_runs(
+                experiment_ids=[experiment_id],
+                filter_string=(
+                    "tags.`nnunet_tracker.run_type` = 'fold' and attributes.status = 'FINISHED'"
+                ),
+                order_by=["start_time DESC"],
+                max_results=_MAX_FOLD_RESULTS,
+            )
         )
+        if len(runs) >= _MAX_FOLD_RESULTS:
+            logger.warning(
+                "Query returned %d runs (limit %d). Some fold runs may be missing. "
+                "Consider filtering by --cv-group.",
+                len(runs),
+                _MAX_FOLD_RESULTS,
+            )
+        return runs
 
     if not SAFE_TAG_VALUE_PATTERN.fullmatch(cv_group):
         logger.warning("cv_group contains unsafe characters, skipping tag-based query")
         return []
 
-    return client.search_runs(
-        experiment_ids=[experiment_id],
-        filter_string=(
-            f"tags.`nnunet_tracker.cv_group` = '{cv_group}' "
-            "and tags.`nnunet_tracker.run_type` = 'fold' "
-            "and attributes.status = 'FINISHED'"
-        ),
-        order_by=["start_time DESC"],
-        max_results=_MAX_FOLD_RESULTS,
+    runs = list(
+        client.search_runs(
+            experiment_ids=[experiment_id],
+            filter_string=(
+                f"tags.`nnunet_tracker.cv_group` = '{cv_group}' "
+                "and tags.`nnunet_tracker.run_type` = 'fold' "
+                "and attributes.status = 'FINISHED'"
+            ),
+            order_by=["start_time DESC"],
+            max_results=_MAX_FOLD_RESULTS,
+        )
     )
+    if len(runs) >= _MAX_FOLD_RESULTS:
+        logger.warning(
+            "Query returned %d runs (limit %d). Some fold runs may be missing.",
+            len(runs),
+            _MAX_FOLD_RESULTS,
+        )
+    return runs
 
 
 def _extract_fold_result(run: Any) -> FoldResult | None:
@@ -257,7 +276,9 @@ def _extract_fold_result(run: Any) -> FoldResult | None:
         if key.startswith("dice_class_"):
             try:
                 cls_idx = int(key[len("dice_class_") :])
-                dice_per_class[cls_idx] = float(value)
+                val = float(value)
+                if math.isfinite(val):
+                    dice_per_class[cls_idx] = val
             except (ValueError, TypeError):
                 continue
 
@@ -348,7 +369,7 @@ def log_cv_summary(
 
         client.set_terminated(run_id, status="FINISHED")
 
-        return run_id
+        return str(run_id)
 
     except Exception:
         logger.debug("Failed to log CV summary", exc_info=True)

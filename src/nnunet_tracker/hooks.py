@@ -15,6 +15,11 @@ from nnunet_tracker.ddp import should_log
 
 logger = logging.getLogger("nnunet_tracker")
 
+# Foreground-mean metrics from summary.json -> MLflow metric names.
+_FOREGROUND_MEAN_METRICS = {"Dice": "final_val_mean_fg_dice", "IoU": "final_val_mean_fg_iou"}
+# Per-class metric prefixes from summary.json 'mean' section.
+_PER_CLASS_METRIC_PREFIXES = {"Dice": "final_val_dice_class_", "IoU": "final_val_iou_class_"}
+
 
 def _should_track(trainer: Any, config: TrackerConfig) -> bool:
     """Check if tracking should proceed for this trainer and config."""
@@ -97,7 +102,7 @@ def log_run_start(trainer: Any, config: TrackerConfig) -> str | None:
         if trainer_run_id == existing_id:
             # Genuine double-call for same fold — skip
             logger.debug("MLflow run already active (%s), skipping start_run", existing_id)
-            return existing_id
+            return str(existing_id)
         # Foreign/stale run detected — do NOT end it (could be user's outer run).
         # Log a warning and skip starting a new run to avoid destroying external state.
         logger.warning(
@@ -109,7 +114,7 @@ def log_run_start(trainer: Any, config: TrackerConfig) -> str | None:
         return None
 
     active_run = mlflow.start_run(run_name=run_name)
-    run_id = active_run.info.run_id
+    run_id: str = active_run.info.run_id
 
     try:
         cv_tags = _build_cv_tags(trainer)
@@ -322,6 +327,13 @@ def _is_safe_output_folder(output_folder: str) -> bool:
     return True
 
 
+def _sanitize_label_key(key: str) -> str:
+    """Convert summary.json label key to MLflow-safe metric name component."""
+    import re as _re
+
+    return _re.sub(r"[^A-Za-z0-9_]", "", key.replace(", ", "_").replace(",", "_"))
+
+
 @failsafe
 def log_run_end(trainer: Any, config: TrackerConfig) -> None:
     """End the MLflow run and optionally log artifacts.
@@ -356,6 +368,75 @@ def log_run_end(trainer: Any, config: TrackerConfig) -> None:
     trainer_run_id = getattr(trainer, "_mlflow_run_id", None)
     if active is not None and trainer_run_id is not None and active.info.run_id == trainer_run_id:
         mlflow.end_run()
+
+
+@failsafe
+def log_validation_summary(trainer: Any, config: TrackerConfig) -> None:
+    """Log post-training validation metrics from summary.json to MLflow.
+
+    Called from perform_actual_validation() AFTER super() completes.
+    Uses MlflowClient to write to the (already finished) run.
+    """
+    if not _should_track(trainer, config):
+        return
+
+    run_id = getattr(trainer, "_mlflow_run_id", None)
+    if run_id is None:
+        return
+
+    output_folder = getattr(trainer, "output_folder", None)
+    if output_folder is None:
+        return
+
+    summary_path = os.path.join(output_folder, "validation", "summary.json")
+    if not os.path.isfile(summary_path):
+        return
+
+    import json
+    import math
+    import time
+
+    from mlflow.entities import Metric
+    from mlflow.tracking import MlflowClient
+
+    with open(summary_path, encoding="utf-8") as f:
+        summary = json.load(f)
+
+    metrics_dict: dict[str, float] = {}
+
+    # Foreground-mean metrics (only Dice and IoU).
+    fg_mean = summary.get("foreground_mean")
+    if isinstance(fg_mean, dict):
+        for json_key, mlflow_key in _FOREGROUND_MEAN_METRICS.items():
+            val = fg_mean.get(json_key)
+            if isinstance(val, (int, float)) and math.isfinite(val):
+                metrics_dict[mlflow_key] = float(val)
+
+    # Per-class metrics from 'mean' section.
+    mean_section = summary.get("mean")
+    if isinstance(mean_section, dict):
+        for label_key, label_metrics in mean_section.items():
+            if not isinstance(label_metrics, dict):
+                continue
+            safe_key = _sanitize_label_key(str(label_key))
+            if not safe_key:
+                continue
+            for json_key, prefix in _PER_CLASS_METRIC_PREFIXES.items():
+                val = label_metrics.get(json_key)
+                if isinstance(val, (int, float)) and math.isfinite(val):
+                    metrics_dict[prefix + safe_key] = float(val)
+
+    if not metrics_dict:
+        return
+
+    client = MlflowClient(tracking_uri=config.tracking_uri)
+    ts = int(time.time() * 1000)
+    batch = [Metric(key=k, value=v, timestamp=ts, step=0) for k, v in metrics_dict.items()]
+    client.log_batch(run_id, metrics=batch)
+
+    # Optionally log summary.json as artifact.
+    if config.log_artifacts and _is_safe_output_folder(output_folder):
+        client.log_artifact(run_id, summary_path, artifact_path="validation")
 
 
 @failsafe

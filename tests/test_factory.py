@@ -219,3 +219,86 @@ class TestCreateTrackedTrainer:
             instance.run_training()
 
             mock_end_failed.assert_not_called()
+
+    def test_perform_actual_validation_calls_super_then_hook(
+        self, mock_trainer_class, tracker_config_enabled
+    ) -> None:
+        """Verify perform_actual_validation calls super() first, then log_validation_summary."""
+        call_order = []
+
+        tracked_class = create_tracked_trainer(mock_trainer_class, config=tracker_config_enabled)
+        instance = tracked_class(plans={}, configuration="3d_fullres", fold=0, dataset_json={})
+
+        original_validate = mock_trainer_class.perform_actual_validation
+
+        def tracked_super_validate(self_inner, *args, **kwargs):
+            call_order.append("super_perform_actual_validation")
+            return original_validate(self_inner, *args, **kwargs)
+
+        with (
+            patch.object(mock_trainer_class, "perform_actual_validation", tracked_super_validate),
+            patch(
+                "nnunet_tracker.factory.log_validation_summary",
+                side_effect=lambda *a: call_order.append("log_validation_summary"),
+            ),
+        ):
+            instance.perform_actual_validation()
+
+        assert call_order == ["super_perform_actual_validation", "log_validation_summary"]
+
+    def test_perform_actual_validation_forwards_args(
+        self, mock_trainer_class, tracker_config_enabled
+    ) -> None:
+        """Verify that arguments are forwarded to super().perform_actual_validation."""
+        tracked_class = create_tracked_trainer(mock_trainer_class, config=tracker_config_enabled)
+        instance = tracked_class(plans={}, configuration="3d_fullres", fold=0, dataset_json={})
+
+        with (
+            patch.object(mock_trainer_class, "perform_actual_validation") as mock_validate,
+            patch("nnunet_tracker.factory.log_validation_summary"),
+        ):
+            instance.perform_actual_validation(save_probabilities=True)
+
+        mock_validate.assert_called_once_with(save_probabilities=True)
+
+    def test_perform_actual_validation_returns_super_result(
+        self, mock_trainer_class, tracker_config_enabled
+    ) -> None:
+        """super().perform_actual_validation return value is propagated."""
+
+        class ReturningTrainer(mock_trainer_class):
+            def perform_actual_validation(self, *args, **kwargs):
+                return {"metric": 0.95}
+
+        tracked_class = create_tracked_trainer(ReturningTrainer, config=tracker_config_enabled)
+        instance = tracked_class()
+
+        with patch("nnunet_tracker.factory.log_validation_summary"):
+            result = instance.perform_actual_validation()
+
+        assert result == {"metric": 0.95}
+
+    def test_run_training_returns_super_result(
+        self, mock_trainer_class, tracker_config_enabled
+    ) -> None:
+        """super().run_training return value is propagated."""
+
+        class ReturningTrainer(mock_trainer_class):
+            def run_training(self):
+                return "training_done"
+
+        with (
+            patch("nnunet_tracker.factory.log_run_start"),
+            patch("nnunet_tracker.factory.log_fingerprint"),
+            patch("nnunet_tracker.factory.log_plans_and_config"),
+            patch("nnunet_tracker.factory.log_run_end"),
+            patch("nnunet_tracker.factory.log_learning_rate"),
+            patch("nnunet_tracker.factory.log_train_loss"),
+            patch("nnunet_tracker.factory.log_validation_metrics"),
+            patch("nnunet_tracker.factory.log_epoch_end"),
+        ):
+            tracked_class = create_tracked_trainer(ReturningTrainer, config=tracker_config_enabled)
+            instance = tracked_class()
+            result = instance.run_training()
+
+        assert result == "training_done"

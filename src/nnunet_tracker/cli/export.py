@@ -141,10 +141,11 @@ def _run_export(args: argparse.Namespace, remaining: list[str]) -> None:
                 f.write(result)
             os.replace(tmp_path, abs_output)
             tmp_path = None  # Replaced successfully, no cleanup needed
-        except Exception:
+        except OSError as e:
             if tmp_path is not None and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-            raise
+            print(f"Error: Failed to write output file: {e}", file=sys.stderr)
+            sys.exit(1)
         print(f"Exported to {args.output}", file=sys.stderr)
     else:
         print(result, end="")

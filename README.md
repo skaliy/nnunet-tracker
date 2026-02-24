@@ -4,7 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/nnunet-tracker/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-Lightweight MLflow-based experiment tracking for nnU-Net. Wraps any nnU-Net trainer with automatic metric logging, artifact tracking, and cross-validation summarization -- without modifying your nnU-Net installation. Production-ready for clinical research workflows.
+Lightweight MLflow-based experiment tracking for nnU-Net. Wraps any nnU-Net trainer with automatic metric logging, artifact tracking, and cross-validation summarization, without modifying your nnU-Net installation.
 
 ## Quick Start
 

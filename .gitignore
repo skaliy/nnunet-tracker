@@ -234,6 +234,3 @@ Desktop.ini
 *.crt
 .secrets
 *.secrets
-
-# Project planning notes
-nnunet_tracker_plan.md

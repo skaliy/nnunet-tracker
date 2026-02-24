@@ -132,7 +132,7 @@ class TestCreateTrackedTrainer:
         instance_a = tracked()
         instance_b = tracked()
         instance_a._mlflow_run_id = "run-a"
-        assert instance_b._mlflow_run_id is None
+        assert not hasattr(instance_b, "_mlflow_run_id")
 
     def test_original_trainer_class_name_stored(
         self, mock_trainer_class, tracker_config_enabled

@@ -73,10 +73,6 @@ def create_tracked_trainer(
         _tracker_config: TrackerConfig = config  # type: ignore[assignment]
         _original_trainer_class_name: str = base_class.__name__
 
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self._mlflow_run_id: str | None = None
-
         def run_training(self):
             """Wrap run_training with crash-safe MLflow run cleanup.
 
@@ -88,7 +84,7 @@ def create_tracked_trainer(
                 return super().run_training()
             except Exception:
                 if self._tracker_config.enabled:
-                    end_run_as_failed(run_id=self._mlflow_run_id)
+                    end_run_as_failed(run_id=getattr(self, "_mlflow_run_id", None))
                 raise
 
         def on_train_start(self) -> None:

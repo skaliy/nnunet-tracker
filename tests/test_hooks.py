@@ -176,6 +176,16 @@ class TestLogRunStart:
         params = mock_mlflow.log_params.call_args[0][0]
         assert params["initial_lr"] == 0.005
 
+    def test_fold_all_run_name_format(
+        self, mock_trainer, tracker_config_enabled, mock_mlflow
+    ) -> None:
+        """fold='all' produces run name like 'Dataset_all_config' not 'Dataset_foldall_config'."""
+        mock_trainer.fold = "all"
+        log_run_start(mock_trainer, tracker_config_enabled)
+        run_name = mock_mlflow.start_run.call_args[1]["run_name"]
+        assert "_all_" in run_name
+        assert "_foldall_" not in run_name
+
     def test_configuration_name_fallback(
         self, mock_trainer, tracker_config_enabled, mock_mlflow
     ) -> None:
@@ -646,6 +656,14 @@ class TestBuildCVTags:
         mock_trainer.configuration = "2d"
         tags = _build_cv_tags(mock_trainer)
         assert "2d" in tags["nnunet_tracker.cv_group"]
+
+    def test_fold_all_sets_run_type_final(self, mock_trainer) -> None:
+        """fold='all' should produce run_type='final' instead of 'fold'."""
+        mock_trainer.fold = "all"
+        tags = _build_cv_tags(mock_trainer)
+        assert tags["nnunet_tracker.fold"] == "all"
+        assert tags["nnunet_tracker.run_type"] == "final"
+        assert "nnunet_tracker.cv_group" in tags
 
     def test_no_cv_group_when_all_parts_none(self, mock_trainer) -> None:
         mock_trainer.plans_manager = None

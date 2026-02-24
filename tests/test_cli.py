@@ -270,7 +270,7 @@ class TestValidationAfterTraining:
             },
         )
 
-    def _run(self, tmp_path, trainer_class, fold="0"):
+    def _run(self, tmp_path, trainer_class, fold: str = "0"):
         """Invoke _run_with_tracked_trainer with mocked nnU-Net imports."""
         self._make_preprocessed_dir(tmp_path)
         with self._mock_nnunet_modules(tmp_path):
@@ -361,6 +361,28 @@ class TestValidationAfterTraining:
         self._run(tmp_path, FakeTrainer)
         assert "validate" in calls
         assert "load_ckpt" not in calls
+
+    def test_fold_all_passes_string_to_trainer(self, tmp_path):
+        """fold='all' should pass the string 'all' to trainer, not expand to 5 folds."""
+        init_calls = []
+
+        class FakeTrainer:
+            output_folder = str(tmp_path / "output")
+
+            def __init__(self, **kwargs):
+                init_calls.append(kwargs.get("fold"))
+
+            def run_training(self):
+                pass
+
+            def load_checkpoint(self, path):
+                pass
+
+            def perform_actual_validation(self):
+                pass
+
+        self._run(tmp_path, FakeTrainer, fold="all")
+        assert init_calls == ["all"]
 
     def test_validation_failure_does_not_crash(self, tmp_path):
         """Exception in perform_actual_validation is caught and does not propagate."""

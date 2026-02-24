@@ -33,7 +33,7 @@ def register_train_command(subparsers: Any) -> None:
             "Positional arguments (forwarded to nnUNetv2_train):\n"
             "  dataset_name_or_id  Dataset name or ID (e.g., Dataset001_BrainTumour or 1)\n"
             "  configuration       nnU-Net configuration (e.g., 2d, 3d_fullres, 3d_lowres)\n"
-            "  fold                Fold number (0-4) or 'all' for 5-fold CV\n"
+            "  fold                Fold number (0-4) or 'all' (train on all data, no val split)\n"
             "\n"
             "Optional forwarded arguments:\n"
             "  -tr TRAINER         Trainer class name (default: nnUNetTrainer)\n"
@@ -186,7 +186,7 @@ def _run_with_tracked_trainer(
         sys.exit(1)
 
     if fold == "all":
-        folds = list(range(5))
+        folds: list[str | int] = ["all"]
     else:
         try:
             fold_int = int(fold)

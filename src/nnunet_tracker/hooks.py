@@ -92,7 +92,10 @@ def log_run_start(trainer: Any, config: TrackerConfig) -> str | None:
     configuration = getattr(trainer, "configuration_name", None) or getattr(
         trainer, "configuration", "?"
     )
-    run_name = f"{dataset_name}_fold{fold}_{configuration}"
+    if fold == "all":
+        run_name = f"{dataset_name}_all_{configuration}"
+    else:
+        run_name = f"{dataset_name}_fold{fold}_{configuration}"
 
     # Guard against double-call or stale run from a previous fold
     existing_run = mlflow.active_run()
@@ -196,9 +199,10 @@ def _build_cv_tags(trainer: Any) -> dict[str, str]:
         trainer, "configuration", None
     )
 
+    run_type = "final" if fold == "all" else "fold"
     tags: dict[str, str] = {
         "nnunet_tracker.fold": str(fold),
-        "nnunet_tracker.run_type": "fold",
+        "nnunet_tracker.run_type": run_type,
     }
 
     parts = [p for p in (dataset_name, configuration, plans_name) if p is not None]

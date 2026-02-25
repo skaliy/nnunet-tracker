@@ -127,7 +127,7 @@ print(f"Missing folds: {summary.missing_folds}")
 print(f"All complete: {summary.is_complete}")
 
 aggregates = summary.compute_aggregate_metrics()
-print(f"Mean Dice: {aggregates.get('cv_mean_fg_dice', 'N/A')}")
+print(f"Mean Dice: {aggregates.get('cv_mean_ema_fg_dice', 'N/A')}")
 ```
 
 ---
@@ -297,8 +297,6 @@ Returns a dictionary with keys following the pattern:
 
 | Key Pattern | Description |
 |-------------|-------------|
-| `cv_mean_fg_dice` | Mean of mean foreground Dice across folds |
-| `cv_std_fg_dice` | Standard deviation of mean foreground Dice |
 | `cv_mean_val_loss` | Mean validation loss |
 | `cv_std_val_loss` | Standard deviation of validation loss |
 | `cv_mean_ema_fg_dice` | Mean EMA foreground Dice |
@@ -318,7 +316,6 @@ class FoldResult:
     fold: int
     run_id: str
     status: str
-    mean_fg_dice: float | None = None
     dice_per_class: dict[int, float] = field(default_factory=dict)
     val_loss: float | None = None
     ema_fg_dice: float | None = None
@@ -333,7 +330,6 @@ Metrics extracted from a single fold's MLflow run. This is a frozen (immutable) 
 | `fold` | `int` | Fold number (e.g., 0-4) |
 | `run_id` | `str` | MLflow run ID |
 | `status` | `str` | MLflow run status (e.g., `"FINISHED"`, `"FAILED"`) |
-| `mean_fg_dice` | `float \| None` | Mean foreground Dice coefficient |
 | `dice_per_class` | `dict[int, float]` | Per-class Dice scores keyed by class index |
 | `val_loss` | `float \| None` | Final validation loss |
 | `ema_fg_dice` | `float \| None` | Exponential moving average foreground Dice |

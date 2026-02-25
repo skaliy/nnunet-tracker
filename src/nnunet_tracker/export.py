@@ -144,7 +144,7 @@ def _build_rows(summary: CVSummary) -> tuple[list[str], list[list[str]]]:
     """
     sorted_classes = summary.all_class_indices
 
-    headers = ["Fold", "Mean FG Dice", "Val Loss", "EMA FG Dice"]
+    headers = ["Fold", "Val Loss", "EMA FG Dice"]
     for cls_idx in sorted_classes:
         headers.append(f"Dice Class {cls_idx}")
 
@@ -153,7 +153,6 @@ def _build_rows(summary: CVSummary) -> tuple[list[str], list[list[str]]]:
         r = summary.fold_results[fold_num]
         row = [
             str(fold_num),
-            f"{r.mean_fg_dice:{_DICE_FMT}}" if r.mean_fg_dice is not None else "",
             f"{r.val_loss:{_LOSS_FMT}}" if r.val_loss is not None else "",
             f"{r.ema_fg_dice:{_DICE_FMT}}" if r.ema_fg_dice is not None else "",
         ]
@@ -237,9 +236,7 @@ def _header_to_metric_keys(header: str) -> tuple[str, str] | None:
         (mean_key, std_key) tuple for looking up in aggregates dict,
         or None if the header doesn't map to a known metric.
     """
-    if header == "Mean FG Dice":
-        return "cv_mean_fg_dice", "cv_std_fg_dice"
-    elif header == "Val Loss":
+    if header == "Val Loss":
         return "cv_mean_val_loss", "cv_std_val_loss"
     elif header == "EMA FG Dice":
         return "cv_mean_ema_fg_dice", "cv_std_ema_fg_dice"

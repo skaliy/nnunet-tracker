@@ -16,7 +16,6 @@ from nnunet_tracker.hooks import (
     failsafe,
     log_epoch_end,
     log_fingerprint,
-    log_learning_rate,
     log_plans_and_config,
     log_run_end,
     log_run_start,
@@ -250,35 +249,6 @@ class TestExtractParams:
         assert params["network_arch"] == "ResidualEncoderUNet"
 
 
-class TestLogLearningRate:
-    """Tests for log_learning_rate."""
-
-    def test_logs_lr(self, mock_trainer, tracker_config_enabled, mock_mlflow) -> None:
-        log_learning_rate(mock_trainer, tracker_config_enabled)
-        mock_mlflow.log_metric.assert_called_once_with("learning_rate", 0.01, step=0)
-
-    def test_skipped_when_disabled(
-        self, mock_trainer, tracker_config_disabled, mock_mlflow
-    ) -> None:
-        log_learning_rate(mock_trainer, tracker_config_disabled)
-        mock_mlflow.log_metric.assert_not_called()
-
-    def test_skipped_when_optimizer_none(
-        self, mock_trainer, tracker_config_enabled, mock_mlflow
-    ) -> None:
-        mock_trainer.optimizer = None
-        log_learning_rate(mock_trainer, tracker_config_enabled)
-        mock_mlflow.log_metric.assert_not_called()
-
-    def test_skipped_when_param_groups_empty(
-        self, mock_trainer, tracker_config_enabled, mock_mlflow
-    ) -> None:
-        mock_trainer.optimizer = MagicMock()
-        mock_trainer.optimizer.param_groups = []
-        log_learning_rate(mock_trainer, tracker_config_enabled)
-        mock_mlflow.log_metric.assert_not_called()
-
-
 class TestLogTrainLoss:
     """Tests for log_train_loss."""
 
@@ -309,7 +279,6 @@ class TestLogValidationMetrics:
         mock_mlflow.log_metrics.assert_called_once()
         metrics = mock_mlflow.log_metrics.call_args[0][0]
         assert "val_loss" in metrics
-        assert "mean_fg_dice" in metrics
         assert "dice_class_0" in metrics
         assert "dice_class_1" in metrics
 
@@ -317,7 +286,6 @@ class TestLogValidationMetrics:
         log_validation_metrics(mock_trainer, tracker_config_enabled)
         metrics = mock_mlflow.log_metrics.call_args[0][0]
         assert metrics["val_loss"] == 0.4
-        assert metrics["mean_fg_dice"] == 0.85
         assert metrics["dice_class_0"] == 0.8
         assert metrics["dice_class_1"] == 0.9
 

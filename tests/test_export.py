@@ -23,7 +23,6 @@ def _make_summary(fold_count: int = 5, with_classes: bool = True) -> CVSummary:
             fold=i,
             run_id=f"run-fold-{i}",
             status="FINISHED",
-            mean_fg_dice=0.82 + i * 0.01,
             val_loss=0.35 - i * 0.01,
             ema_fg_dice=0.81 + i * 0.01,
             dice_per_class=dice_per_class,
@@ -41,7 +40,7 @@ class TestBuildRows:
     def test_empty_summary(self) -> None:
         summary = CVSummary(cv_group="test", experiment_name="test")
         headers, rows = _build_rows(summary)
-        assert headers == ["Fold", "Mean FG Dice", "Val Loss", "EMA FG Dice"]
+        assert headers == ["Fold", "Val Loss", "EMA FG Dice"]
         assert rows == []
 
     def test_single_fold(self) -> None:
@@ -49,7 +48,7 @@ class TestBuildRows:
         headers, rows = _build_rows(summary)
         assert len(rows) == 1
         assert rows[0][0] == "0"  # Fold number
-        assert rows[0][1] == "0.8200"  # Mean FG Dice
+        assert rows[0][1] == "0.3500"  # Val Loss
 
     def test_five_folds(self) -> None:
         summary = _make_summary(fold_count=5)
@@ -67,8 +66,8 @@ class TestBuildRows:
             },
         )
         headers, rows = _build_rows(summary)
-        assert rows[0][1] == ""  # mean_fg_dice is None
-        assert rows[0][2] == ""  # val_loss is None
+        assert rows[0][1] == ""  # val_loss is None
+        assert rows[0][2] == ""  # ema_fg_dice is None
 
     def test_per_class_auto_detection(self) -> None:
         summary = _make_summary(fold_count=2, with_classes=True)
@@ -79,7 +78,7 @@ class TestBuildRows:
     def test_no_per_class_columns(self) -> None:
         summary = _make_summary(fold_count=2, with_classes=False)
         headers, rows = _build_rows(summary)
-        assert len(headers) == 4  # No per-class columns
+        assert len(headers) == 3  # No per-class columns
 
     def test_varying_class_indices(self) -> None:
         """Union of class indices across folds."""
@@ -129,7 +128,7 @@ class TestExportCSV:
         reader = csv.reader(io.StringIO(result))
         header = next(reader)
         assert header[0] == "Fold"
-        assert "Mean FG Dice" in header
+        assert "Val Loss" in header
 
     def test_csv_data_rows(self) -> None:
         summary = _make_summary(fold_count=3)
@@ -174,7 +173,7 @@ class TestExportCSV:
     def test_csv_formatting_precision(self) -> None:
         summary = _make_summary(fold_count=1)
         result = export_csv(summary)
-        assert "0.8200" in result  # 4 decimal places
+        assert "0.3500" in result  # 4 decimal places
 
 
 class TestExportLatex:
@@ -190,8 +189,8 @@ class TestExportLatex:
     def test_latex_tabular_columns(self) -> None:
         summary = _make_summary(fold_count=2, with_classes=True)
         result = export_latex(summary)
-        # 6 columns: Fold + Mean FG Dice + Val Loss + EMA FG Dice + 2 classes
-        assert r"\begin{tabular}{lccccc}" in result
+        # 5 columns: Fold + Val Loss + EMA FG Dice + 2 classes
+        assert r"\begin{tabular}{lcccc}" in result
 
     def test_latex_mean_pm_std_row(self) -> None:
         summary = _make_summary(fold_count=5)
@@ -241,7 +240,6 @@ class TestExportLatex:
                     fold=0,
                     run_id="r0",
                     status="FINISHED",
-                    mean_fg_dice=0.85,
                 ),
             },
         )
@@ -252,7 +250,7 @@ class TestExportLatex:
         summary = _make_summary(fold_count=1)
         result = export_latex(summary)
         # Mean value present but no ± since only 1 fold
-        assert "0.8200" in result
+        assert "0.3500" in result
         # The aggregate row label still says Mean ± Std
         assert r"Mean $\pm$ Std" in result
 

@@ -140,10 +140,9 @@ def demonstrate_extracting_metrics(runs: list) -> None:
         run.info          -- Run metadata (run_id, status, start_time, etc.).
 
     Key metric names logged by nnunet-tracker:
-        mean_fg_dice      -- Mean foreground Dice score (final epoch).
+        ema_fg_dice       -- Exponential moving average of foreground Dice.
         val_loss          -- Validation loss (final epoch).
         train_loss        -- Training loss (final epoch).
-        ema_fg_dice       -- Exponential moving average of foreground Dice.
         learning_rate     -- Learning rate (final epoch).
         dice_class_0      -- Per-class Dice for class 0.
         dice_class_1      -- Per-class Dice for class 1.
@@ -166,18 +165,15 @@ def demonstrate_extracting_metrics(runs: list) -> None:
         status = run.info.status
 
         # Final metric values
-        mean_dice = metrics.get("mean_fg_dice")
-        val_loss = metrics.get("val_loss")
         ema_dice = metrics.get("ema_fg_dice")
+        val_loss = metrics.get("val_loss")
 
-        dice_str = f"{mean_dice:.4f}" if mean_dice is not None else "N/A"
-        loss_str = f"{val_loss:.4f}" if val_loss is not None else "N/A"
         ema_str = f"{ema_dice:.4f}" if ema_dice is not None else "N/A"
+        loss_str = f"{val_loss:.4f}" if val_loss is not None else "N/A"
 
         print(f"  Fold {fold} (run {run_id}, {status}):")
-        print(f"    mean_fg_dice = {dice_str}")
-        print(f"    val_loss     = {loss_str}")
         print(f"    ema_fg_dice  = {ema_str}")
+        print(f"    val_loss     = {loss_str}")
 
         # Per-class Dice scores
         class_dice = {
@@ -205,13 +201,13 @@ def demonstrate_metric_history(client: Any, run_id: str) -> None:
     print(f"  Fetching metric history for run {run_id[:8]}...")
     print()
 
-    history = client.get_metric_history(run_id, "mean_fg_dice")
+    history = client.get_metric_history(run_id, "ema_fg_dice")
 
     if not history:
-        print("  No mean_fg_dice history found for this run.")
+        print("  No ema_fg_dice history found for this run.")
         return
 
-    print(f"  mean_fg_dice history ({len(history)} points):")
+    print(f"  ema_fg_dice history ({len(history)} points):")
     # Show first 5 and last 5 points
     display_points = history[:5]
     if len(history) > 10:
@@ -232,7 +228,7 @@ def demonstrate_querying_summary_runs(client: Any, experiment_id: str) -> None:
     """Query cv_summary runs created by log_cv_summary().
 
     Summary runs are tagged with nnunet_tracker.run_type = 'cv_summary'
-    and contain aggregate metrics (cv_mean_fg_dice, cv_std_fg_dice, etc.)
+    and contain aggregate metrics (cv_mean_ema_fg_dice, cv_std_ema_fg_dice, etc.)
     plus metadata tags about fold completeness.
     """
     print("  Querying summary runs...")
@@ -268,8 +264,8 @@ def demonstrate_querying_summary_runs(client: Any, experiment_id: str) -> None:
         print(f"    Completed:      {num_completed} folds: {completed_folds}")
         print(f"    Missing:        {missing_folds}")
 
-        mean_dice = metrics.get("cv_mean_fg_dice")
-        std_dice = metrics.get("cv_std_fg_dice")
+        mean_dice = metrics.get("cv_mean_ema_fg_dice")
+        std_dice = metrics.get("cv_std_ema_fg_dice")
         if mean_dice is not None:
             std_str = f" +/- {std_dice:.4f}" if std_dice is not None else ""
             print(f"    Mean FG Dice:   {mean_dice:.4f}{std_str}")
@@ -306,7 +302,7 @@ def demonstrate_comparing_experiments(client: Any) -> None:
         print("            max_results=1,")
         print("        )")
         print("        if summary_runs:")
-        print('            dice = summary_runs[0].data.metrics.get("cv_mean_fg_dice")')
+        print('            dice = summary_runs[0].data.metrics.get("cv_mean_ema_fg_dice")')
         print("            results[exp_name] = dice")
         print()
         print("    # Sort by Dice score descending")
@@ -331,7 +327,7 @@ def demonstrate_comparing_experiments(client: Any) -> None:
         )
 
         if summary_runs:
-            dice = summary_runs[0].data.metrics.get("cv_mean_fg_dice")
+            dice = summary_runs[0].data.metrics.get("cv_mean_ema_fg_dice")
             comparison[exp.name] = dice
         else:
             # Fall back to averaging fold runs directly
@@ -345,9 +341,9 @@ def demonstrate_comparing_experiments(client: Any) -> None:
             )
             if fold_runs:
                 dice_values = [
-                    r.data.metrics.get("mean_fg_dice")
+                    r.data.metrics.get("ema_fg_dice")
                     for r in fold_runs
-                    if r.data.metrics.get("mean_fg_dice") is not None
+                    if r.data.metrics.get("ema_fg_dice") is not None
                 ]
                 if dice_values:
                     import statistics

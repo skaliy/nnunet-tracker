@@ -40,6 +40,14 @@ nnunet-tracker train [--tracker-disable] DATASET CONFIGURATION FOLD [-tr TRAINER
 | `-tr` | `nnUNetTrainer` | Trainer class name. Must be a valid Python identifier. |
 | `-p` | `nnUNetPlans` | Plans identifier. The command loads `<plans>.json` from the preprocessed directory. |
 | `-c` | `false` | Continue training from the latest checkpoint. Looks for `checkpoint_final.pth` first, then `checkpoint_latest.pth`. |
+| `-pretrained_weights` | `None` | Path to pretrained weights file for transfer learning. |
+| `-num_gpus` | `1` | Number of GPUs (only 1 supported; use `nnUNetv2_train` directly for multi-GPU). |
+| `--npz` | `false` | Save softmax predictions as `.npz` from validation. |
+| `--val` | `false` | Validation-only mode (skip training, requires completed training). |
+| `--val_best` | `false` | Use `checkpoint_best.pth` for validation instead of `checkpoint_final.pth`. |
+| `--use_compressed` | `false` | Do not decompress training cases. More CPU/RAM intensive. |
+| `--disable_checkpointing` | `false` | Disable checkpoint saving during training. |
+| `-device` | `cuda` | Device: `cuda`, `cpu`, or `mps`. |
 | `--tracker-disable` | `false` | Disable MLflow tracking for this run. The trainer runs as if unwrapped. |
 
 ### Behavior

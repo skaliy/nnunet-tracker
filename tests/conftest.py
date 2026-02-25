@@ -94,7 +94,6 @@ class MockLogger:
                 [0.75, 0.85],
                 [0.8, 0.9],
             ],
-            "mean_fg_dice": [0.75, 0.8, 0.85],
             "ema_fg_dice": [0.74, 0.79, 0.84],
             "epoch_start_timestamps": [1000.0, 1100.0, 1200.0],
             "epoch_end_timestamps": [1050.0, 1150.0, 1250.0],
@@ -166,7 +165,14 @@ class MockTrainerBase:
     This is the 'base_class' that create_tracked_trainer wraps.
     """
 
-    def __init__(self, plans=None, configuration=None, fold=0, dataset_json=None, device=None):
+    def __init__(
+        self,
+        plans=None,
+        configuration=None,
+        fold=0,
+        dataset_json=None,
+        device=None,
+    ):
         self.plans_manager = MockPlansManager()
         self.configuration_manager = MockConfigurationManager()
         self.logger = MockLogger()

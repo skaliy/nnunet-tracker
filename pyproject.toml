@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nnunet-tracker"
-version = "0.1.3"
+version = "0.2.0"
 description = "Lightweight MLflow-based experiment tracking for nnU-Net"
 readme = "README.md"
 requires-python = ">=3.10"

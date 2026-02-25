@@ -125,25 +125,18 @@ def _print_table(summary: Any, aggregates: dict[str, float]) -> None:
 
     print()
     print("Fold Results:")
-    print(f"  {'Fold':<6}{'Status':<12}{'Mean FG Dice':<16}{'Val Loss':<12}{'Run ID'}")
-    print(f"  {'----':<6}{'------':<12}{'------------':<16}{'--------':<12}{'------'}")
+    print(f"  {'Fold':<6}{'Status':<12}{'Val Loss':<12}{'Run ID'}")
+    print(f"  {'----':<6}{'------':<12}{'--------':<12}{'------'}")
 
     for fold_num in sorted(summary.fold_results.keys()):
         r = summary.fold_results[fold_num]
-        dice_str = f"{r.mean_fg_dice:.4f}" if r.mean_fg_dice is not None else "N/A"
         loss_str = f"{r.val_loss:.4f}" if r.val_loss is not None else "N/A"
         run_id_short = r.run_id[:8] if r.run_id else "N/A"
-        print(f"  {fold_num:<6}{r.status:<12}{dice_str:<16}{loss_str:<12}{run_id_short}")
+        print(f"  {fold_num:<6}{r.status:<12}{loss_str:<12}{run_id_short}")
 
     if aggregates:
         print()
         print("Aggregate Metrics:")
-        mean_dice = aggregates.get("cv_mean_fg_dice")
-        std_dice = aggregates.get("cv_std_fg_dice")
-        if mean_dice is not None:
-            std_str = f" +/- {std_dice:.4f}" if std_dice is not None else ""
-            print(f"  Mean FG Dice:  {mean_dice:.4f}{std_str}")
-
         mean_loss = aggregates.get("cv_mean_val_loss")
         std_loss = aggregates.get("cv_std_val_loss")
         if mean_loss is not None:
@@ -176,7 +169,6 @@ def _print_json(summary: Any, aggregates: dict[str, float]) -> None:
                 "fold": r.fold,
                 "run_id": r.run_id,
                 "status": r.status,
-                "mean_fg_dice": r.mean_fg_dice,
                 "val_loss": r.val_loss,
                 "ema_fg_dice": r.ema_fg_dice,
                 "dice_per_class": {str(k): v for k, v in r.dice_per_class.items()},

@@ -105,7 +105,7 @@ def demonstrate_cvsummary_properties(summary) -> None:
     print("  Per-fold results:")
     for fold_num in sorted(summary.fold_results):
         result = summary.fold_results[fold_num]
-        dice_str = f"{result.mean_fg_dice:.4f}" if result.mean_fg_dice is not None else "N/A"
+        dice_str = f"{result.ema_fg_dice:.4f}" if result.ema_fg_dice is not None else "N/A"
         loss_str = f"{result.val_loss:.4f}" if result.val_loss is not None else "N/A"
         print(f"    Fold {result.fold}: dice={dice_str}, val_loss={loss_str}, "
               f"run_id={result.run_id[:8]}...")
@@ -116,9 +116,8 @@ def demonstrate_aggregate_metrics(summary) -> None:
     """Compute and display aggregate metrics across folds.
 
     compute_aggregate_metrics() returns a dict with keys like:
-        cv_mean_fg_dice, cv_std_fg_dice,
-        cv_mean_val_loss, cv_std_val_loss,
         cv_mean_ema_fg_dice, cv_std_ema_fg_dice,
+        cv_mean_val_loss, cv_std_val_loss,
         cv_mean_dice_class_0, cv_std_dice_class_0, ...
 
     Standard deviation requires >= 2 folds; with a single fold only
@@ -136,8 +135,8 @@ def demonstrate_aggregate_metrics(summary) -> None:
     print()
 
     # Common access pattern: get mean +/- std for reporting
-    mean_dice = aggregates.get("cv_mean_fg_dice")
-    std_dice = aggregates.get("cv_std_fg_dice")
+    mean_dice = aggregates.get("cv_mean_ema_fg_dice")
+    std_dice = aggregates.get("cv_std_ema_fg_dice")
     if mean_dice is not None:
         std_str = f" +/- {std_dice:.4f}" if std_dice is not None else ""
         print(f"  Summary: Mean FG Dice = {mean_dice:.4f}{std_str}")
@@ -229,7 +228,7 @@ def demonstrate_log_cv_summary(summary) -> None:
     run rather than creating a duplicate.
 
     The summary run contains:
-      - Aggregate metrics (cv_mean_fg_dice, cv_std_fg_dice, etc.)
+      - Aggregate metrics (cv_mean_ema_fg_dice, cv_std_ema_fg_dice, etc.)
       - Tags: completed_folds, missing_folds, is_complete, num_completed
 
     This uses the MlflowClient API internally, so it does not mutate
@@ -266,27 +265,27 @@ def _build_synthetic_summary():
     fold_results = {
         0: FoldResult(
             fold=0, run_id="a1b2c3d4e5f6a1b2", status="FINISHED",
-            mean_fg_dice=0.8712, dice_per_class={0: 0.9103, 1: 0.8321},
+            dice_per_class={0: 0.9103, 1: 0.8321},
             val_loss=0.3521, ema_fg_dice=0.8698,
         ),
         1: FoldResult(
             fold=1, run_id="b2c3d4e5f6a1b2c3", status="FINISHED",
-            mean_fg_dice=0.8845, dice_per_class={0: 0.9211, 1: 0.8479},
+            dice_per_class={0: 0.9211, 1: 0.8479},
             val_loss=0.3412, ema_fg_dice=0.8830,
         ),
         2: FoldResult(
             fold=2, run_id="c3d4e5f6a1b2c3d4", status="FINISHED",
-            mean_fg_dice=0.8653, dice_per_class={0: 0.9045, 1: 0.8261},
+            dice_per_class={0: 0.9045, 1: 0.8261},
             val_loss=0.3598, ema_fg_dice=0.8641,
         ),
         3: FoldResult(
             fold=3, run_id="d4e5f6a1b2c3d4e5", status="FINISHED",
-            mean_fg_dice=0.8791, dice_per_class={0: 0.9156, 1: 0.8426},
+            dice_per_class={0: 0.9156, 1: 0.8426},
             val_loss=0.3467, ema_fg_dice=0.8779,
         ),
         4: FoldResult(
             fold=4, run_id="e5f6a1b2c3d4e5f6", status="FINISHED",
-            mean_fg_dice=0.8734, dice_per_class={0: 0.9089, 1: 0.8379},
+            dice_per_class={0: 0.9089, 1: 0.8379},
             val_loss=0.3544, ema_fg_dice=0.8720,
         ),
     }

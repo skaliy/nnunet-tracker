@@ -18,7 +18,6 @@ def _make_summary(complete: bool = True) -> CVSummary:
             fold=i,
             run_id=f"run-fold-{i}",
             status="FINISHED",
-            mean_fg_dice=0.82 + i * 0.01,
             val_loss=0.35 - i * 0.01,
             ema_fg_dice=0.81 + i * 0.01,
             dice_per_class={0: 0.78 + i * 0.01, 1: 0.88 + i * 0.01},
@@ -81,8 +80,8 @@ class TestExportCommand:
             main(["export", "--experiment", "test", "--format", "csv"])
         captured = capsys.readouterr()
         assert "Fold" in captured.out
-        assert "Mean FG Dice" in captured.out
-        assert "0.8200" in captured.out
+        assert "Val Loss" in captured.out
+        assert "0.3500" in captured.out
 
     def test_latex_stdout(self, capsys) -> None:
         summary = _make_summary()

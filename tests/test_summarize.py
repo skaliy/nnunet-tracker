@@ -35,7 +35,6 @@ from tests.conftest import (
 
 def _make_fold_run(
     fold: int,
-    mean_fg_dice: float = 0.85,
     val_loss: float = 0.35,
     ema_fg_dice: float = 0.84,
     dice_per_class: dict[int, float] | None = None,
@@ -56,7 +55,6 @@ def _make_fold_run(
         }
 
     metrics: dict[str, float] = {
-        "mean_fg_dice": mean_fg_dice,
         "val_loss": val_loss,
         "ema_fg_dice": ema_fg_dice,
     }
@@ -81,10 +79,9 @@ class TestFoldResult:
     """Tests for FoldResult dataclass."""
 
     def test_basic_creation(self) -> None:
-        result = FoldResult(fold=0, run_id="r1", status="FINISHED", mean_fg_dice=0.85)
+        result = FoldResult(fold=0, run_id="r1", status="FINISHED")
         assert result.fold == 0
         assert result.run_id == "r1"
-        assert result.mean_fg_dice == 0.85
         assert result.dice_per_class == {}
 
     def test_frozen(self) -> None:
@@ -148,34 +145,31 @@ class TestCVSummary:
                     fold=0,
                     run_id="r0",
                     status="FINISHED",
-                    mean_fg_dice=0.85,
                     val_loss=0.35,
                 ),
             }
         )
         agg = summary.compute_aggregate_metrics()
-        assert agg["cv_mean_fg_dice"] == 0.85
-        assert "cv_std_fg_dice" not in agg
         assert agg["cv_mean_val_loss"] == 0.35
         assert "cv_std_val_loss" not in agg
 
     def test_aggregate_mean_std_correct(self) -> None:
         """Verify mean/std against statistics module."""
-        dice_values = [0.82, 0.84, 0.86, 0.83, 0.85]
+        loss_values = [0.32, 0.34, 0.36, 0.33, 0.35]
         results = {
             i: FoldResult(
                 fold=i,
                 run_id=f"r{i}",
                 status="FINISHED",
-                mean_fg_dice=dice_values[i],
+                val_loss=loss_values[i],
             )
             for i in range(5)
         }
         summary = self._make_summary(results)
         agg = summary.compute_aggregate_metrics()
 
-        assert agg["cv_mean_fg_dice"] == pytest.approx(statistics.mean(dice_values))
-        assert agg["cv_std_fg_dice"] == pytest.approx(statistics.stdev(dice_values))
+        assert agg["cv_mean_val_loss"] == pytest.approx(statistics.mean(loss_values))
+        assert agg["cv_std_val_loss"] == pytest.approx(statistics.stdev(loss_values))
 
     def test_aggregate_per_class_dice(self) -> None:
         """Per-class Dice aggregated correctly."""
@@ -203,14 +197,14 @@ class TestCVSummary:
     def test_aggregate_missing_metrics_handled(self) -> None:
         """Folds with None metrics are excluded from aggregation."""
         results = {
-            0: FoldResult(fold=0, run_id="r0", status="FINISHED", mean_fg_dice=0.85),
-            1: FoldResult(fold=1, run_id="r1", status="FINISHED", mean_fg_dice=None),
+            0: FoldResult(fold=0, run_id="r0", status="FINISHED", val_loss=0.35),
+            1: FoldResult(fold=1, run_id="r1", status="FINISHED", val_loss=None),
         }
         summary = self._make_summary(results)
         agg = summary.compute_aggregate_metrics()
         # Only one value, so mean but no std
-        assert agg["cv_mean_fg_dice"] == 0.85
-        assert "cv_std_fg_dice" not in agg
+        assert agg["cv_mean_val_loss"] == 0.35
+        assert "cv_std_val_loss" not in agg
 
     def test_aggregate_identical_metrics(self) -> None:
         """All folds have identical metrics: std = 0."""
@@ -219,24 +213,23 @@ class TestCVSummary:
                 fold=i,
                 run_id=f"r{i}",
                 status="FINISHED",
-                mean_fg_dice=0.85,
+                val_loss=0.35,
             )
             for i in range(5)
         }
         summary = self._make_summary(results)
         agg = summary.compute_aggregate_metrics()
-        assert agg["cv_std_fg_dice"] == pytest.approx(0.0)
+        assert agg["cv_std_val_loss"] == pytest.approx(0.0)
 
 
 class TestExtractFoldResult:
     """Tests for _extract_fold_result helper."""
 
     def test_extracts_from_tagged_run(self) -> None:
-        run = _make_fold_run(fold=2, mean_fg_dice=0.87, val_loss=0.30)
+        run = _make_fold_run(fold=2, val_loss=0.30)
         result = _extract_fold_result(run)
         assert result is not None
         assert result.fold == 2
-        assert result.mean_fg_dice == 0.87
         assert result.val_loss == 0.30
         assert result.run_id == "run-fold-2"
 
@@ -255,7 +248,7 @@ class TestExtractFoldResult:
 
     def test_returns_none_when_no_fold(self) -> None:
         run = MockRun(
-            data=MockRunData(metrics={"mean_fg_dice": 0.85}, params={}, tags={}),
+            data=MockRunData(metrics={"val_loss": 0.4}, params={}, tags={}),
         )
         result = _extract_fold_result(run)
         assert result is None
@@ -263,7 +256,7 @@ class TestExtractFoldResult:
     def test_returns_none_when_fold_not_int(self) -> None:
         run = MockRun(
             data=MockRunData(
-                metrics={"mean_fg_dice": 0.85},
+                metrics={"val_loss": 0.4},
                 params={"fold": "abc"},
                 tags={},
             ),
@@ -282,7 +275,6 @@ class TestExtractFoldResult:
         )
         result = _extract_fold_result(run)
         assert result is not None
-        assert result.mean_fg_dice is None
         assert result.val_loss is None
         assert result.dice_per_class == {}
 
@@ -298,12 +290,11 @@ class TestExtractFoldResult:
         assert result.dice_per_class == {0: 0.80}
 
     def test_nan_inf_filtered_from_scalar_metrics(self) -> None:
-        """NaN/Inf in mean_fg_dice, val_loss, ema_fg_dice should be None."""
+        """NaN/Inf in val_loss, ema_fg_dice should be None."""
         run = MockRun(
             info=MockRunInfo(run_id="r0"),
             data=MockRunData(
                 metrics={
-                    "mean_fg_dice": float("nan"),
                     "val_loss": float("inf"),
                     "ema_fg_dice": float("-inf"),
                 },
@@ -313,7 +304,6 @@ class TestExtractFoldResult:
         )
         result = _extract_fold_result(run)
         assert result is not None
-        assert result.mean_fg_dice is None
         assert result.val_loss is None
         assert result.ema_fg_dice is None
 
@@ -432,7 +422,7 @@ class TestSummarizeExperiment:
     def test_five_fold_complete(self) -> None:
         mock_client = MagicMock()
         mock_client.get_experiment_by_name.return_value = MockExperiment()
-        runs = [_make_fold_run(i, mean_fg_dice=0.82 + i * 0.01) for i in range(5)]
+        runs = [_make_fold_run(i) for i in range(5)]
         # First call for auto-detect, second for tag query
         mock_client.search_runs.side_effect = [runs[:1], runs]
 
@@ -462,8 +452,8 @@ class TestSummarizeExperiment:
         mock_client.get_experiment_by_name.return_value = MockExperiment()
         # Two runs for fold 0 (first is more recent due to DESC order)
         runs = [
-            _make_fold_run(0, mean_fg_dice=0.90, run_id="newer"),
-            _make_fold_run(0, mean_fg_dice=0.80, run_id="older"),
+            _make_fold_run(0, val_loss=0.30, run_id="newer"),
+            _make_fold_run(0, val_loss=0.40, run_id="older"),
         ]
         mock_client.search_runs.side_effect = [runs[:1], runs]
 
@@ -471,7 +461,6 @@ class TestSummarizeExperiment:
             summary = summarize_experiment("test_experiment")
 
         assert summary.fold_results[0].run_id == "newer"
-        assert summary.fold_results[0].mean_fg_dice == 0.90
 
     def test_raises_on_no_extractable_folds(self) -> None:
         """Runs returned but none have a fold number -> ValueError."""
@@ -498,7 +487,6 @@ class TestLogCvSummary:
                 fold=i,
                 run_id=f"r{i}",
                 status="FINISHED",
-                mean_fg_dice=0.82 + i * 0.01,
                 val_loss=0.35 - i * 0.01,
             )
             for i in range(5)
@@ -562,7 +550,7 @@ class TestLogCvSummary:
         mock_client.log_batch.assert_called_once()
         _, kwargs = mock_client.log_batch.call_args
         metric_keys = {m.key for m in kwargs["metrics"]}
-        assert "cv_mean_fg_dice" in metric_keys
+        assert "cv_mean_val_loss" in metric_keys
 
     def test_returns_none_on_failure(self) -> None:
         summary = self._make_complete_summary()

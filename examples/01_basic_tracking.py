@@ -197,7 +197,7 @@ def show_real_usage_pattern() -> None:
     print("    #   - Run parameters: fold, num_epochs, batch_size, patch_size, LR, etc.")
     print("    #   - Dataset fingerprint hashes (SHA-256)")
     print("    #   - Extended plans/config params (preprocessing, network topology)")
-    print("    #   - Per-epoch metrics: train_loss, val_loss, mean_fg_dice, per-class dice")
+    print("    #   - Per-epoch metrics: train_loss, val_loss, ema_fg_dice, per-class dice")
     print("    #   - Learning rate at each epoch")
     print("    #   - EMA foreground Dice")
     print("    #   - Cross-validation tags: nnunet_tracker.fold, nnunet_tracker.cv_group")

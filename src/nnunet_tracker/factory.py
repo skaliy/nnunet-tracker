@@ -8,7 +8,6 @@ from nnunet_tracker.hooks import (
     end_run_as_failed,
     log_epoch_end,
     log_fingerprint,
-    log_learning_rate,
     log_plans_and_config,
     log_run_end,
     log_run_start,
@@ -94,10 +93,6 @@ def create_tracked_trainer(
                 self._mlflow_run_id = run_id
             log_fingerprint(self, self._tracker_config)
             log_plans_and_config(self, self._tracker_config)
-
-        def on_train_epoch_start(self) -> None:
-            super().on_train_epoch_start()
-            log_learning_rate(self, self._tracker_config)
 
         def on_train_epoch_end(self, train_outputs: list) -> None:
             super().on_train_epoch_end(train_outputs)

@@ -217,23 +217,6 @@ def _build_cv_tags(trainer: Any) -> dict[str, str]:
 
 
 @failsafe
-def log_learning_rate(trainer: Any, config: TrackerConfig) -> None:
-    """Log current learning rate. Called from on_train_epoch_start()."""
-    if not _should_track(trainer, config):
-        return
-
-    import mlflow
-
-    optimizer = getattr(trainer, "optimizer", None)
-    if optimizer is None or not getattr(optimizer, "param_groups", None):
-        return
-
-    epoch = getattr(trainer, "current_epoch", 0)
-    lr = optimizer.param_groups[0]["lr"]
-    mlflow.log_metric("learning_rate", lr, step=epoch)
-
-
-@failsafe
 def log_train_loss(trainer: Any, config: TrackerConfig) -> None:
     """Log training loss. Called from on_train_epoch_end()."""
     if not _should_track(trainer, config):
@@ -270,10 +253,6 @@ def log_validation_metrics(trainer: Any, config: TrackerConfig) -> None:
     val_losses = log.get("val_losses", [])
     if val_losses:
         metrics["val_loss"] = float(val_losses[-1])
-
-    mean_fg_dice = log.get("mean_fg_dice", [])
-    if mean_fg_dice:
-        metrics["mean_fg_dice"] = float(mean_fg_dice[-1])
 
     dice_per_class = log.get("dice_per_class_or_region", [])
     if dice_per_class:

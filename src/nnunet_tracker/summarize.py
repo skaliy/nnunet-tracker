@@ -25,7 +25,6 @@ class FoldResult:
         fold: Fold number (e.g., 0-4).
         run_id: MLflow run ID.
         status: MLflow run status (e.g., ``"FINISHED"``).
-        mean_fg_dice: Mean foreground Dice coefficient, or None if unavailable.
         dice_per_class: Per-class Dice scores keyed by class index.
         val_loss: Final validation loss, or None if unavailable.
         ema_fg_dice: Exponential moving average foreground Dice, or None.
@@ -34,7 +33,6 @@ class FoldResult:
     fold: int
     run_id: str
     status: str
-    mean_fg_dice: float | None = None
     dice_per_class: dict[int, float] = field(default_factory=dict)
     val_loss: float | None = None
     ema_fg_dice: float | None = None
@@ -84,19 +82,13 @@ class CVSummary:
 
         Uses statistics.mean/stdev from stdlib.
         Std requires >= 2 folds; single-fold returns mean only.
-        Returns keys like cv_mean_fg_dice, cv_std_fg_dice, etc.
+        Returns keys like cv_mean_val_loss, cv_std_val_loss, etc.
         """
         results = list(self.fold_results.values())
         if not results:
             return {}
 
         metrics: dict[str, float] = {}
-
-        fg_dice_vals = [r.mean_fg_dice for r in results if r.mean_fg_dice is not None]
-        if fg_dice_vals:
-            metrics["cv_mean_fg_dice"] = statistics.mean(fg_dice_vals)
-            if len(fg_dice_vals) >= 2:
-                metrics["cv_std_fg_dice"] = statistics.stdev(fg_dice_vals)
 
         val_loss_vals = [r.val_loss for r in results if r.val_loss is not None]
         if val_loss_vals:
@@ -293,7 +285,6 @@ def _extract_fold_result(run: Any) -> FoldResult | None:
         fold=fold,
         run_id=run.info.run_id,
         status=run.info.status,
-        mean_fg_dice=_safe_float("mean_fg_dice"),
         dice_per_class=dice_per_class,
         val_loss=_safe_float("val_loss"),
         ema_fg_dice=_safe_float("ema_fg_dice"),

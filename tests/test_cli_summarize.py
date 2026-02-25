@@ -50,7 +50,6 @@ class TestSummarizeCommand:
                 fold=i,
                 run_id=f"run-fold-{i}",
                 status="FINISHED",
-                mean_fg_dice=0.82 + i * 0.01,
                 val_loss=0.35 - i * 0.01,
                 ema_fg_dice=0.81 + i * 0.01,
                 dice_per_class={0: 0.78 + i * 0.01, 1: 0.88 + i * 0.01},
@@ -78,7 +77,7 @@ class TestSummarizeCommand:
         captured = capsys.readouterr()
         assert "Cross-Validation Summary" in captured.out
         assert "5/5 folds" in captured.out
-        assert "Mean FG Dice" in captured.out
+        assert "Val Loss" in captured.out
 
     def test_partial_folds_exit_code_2(self) -> None:
         summary = self._make_summary(complete=False)
@@ -131,7 +130,6 @@ class TestSummarizeCommand:
         assert data["is_complete"] is True
         assert len(data["completed_folds"]) == 5
         assert "aggregates" in data
-        assert "cv_mean_fg_dice" in data["aggregates"]
 
     def test_cv_group_passed_through(self) -> None:
         summary = self._make_summary(complete=True)
@@ -156,7 +154,7 @@ class TestSummarizeCommand:
             cv_group="test",
             experiment_name="test",
             fold_results={
-                0: FoldResult(fold=0, run_id="r0", status="FINISHED", mean_fg_dice=0.85),
+                0: FoldResult(fold=0, run_id="r0", status="FINISHED"),
             },
             expected_folds=(0, 1, 2),
         )

@@ -75,7 +75,7 @@ summary = summarize_experiment("Dataset001_BrainTumour")
 print(summary.is_complete)          # True if all 5 folds finished
 print(summary.completed_folds)      # [0, 1, 2, 3, 4]
 aggregates = summary.compute_aggregate_metrics()
-print(aggregates["cv_mean_fg_dice"])  # e.g. 0.8747
+print(aggregates["cv_mean_ema_fg_dice"])  # e.g. 0.8747
 ```
 
 Export results for publication:
